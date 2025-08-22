@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, StringSelectMenuBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+const { SlashCommandBuilder, MessageEmbed, MessageActionRow, MessageSelectMenu, MessageButton } = require('discord.js');
 const PterodactylAPI = require('../services/pterodactyl');
 const authService = require('../services/auth');
 const database = require('../config/database');
@@ -81,7 +81,7 @@ module.exports = {
         try {
             const verification = await authService.generateVerificationCode(userId, serverId);
             
-            const embed = new EmbedBuilder()
+            const embed = new MessageEmbed()
                 .setColor('#00ff00')
                 .setTitle('🔗 Server Linking')
                 .setDescription('To link your server, follow these steps:')
@@ -132,7 +132,7 @@ module.exports = {
                     });
                 }
 
-                const embed = new EmbedBuilder()
+                const embed = new MessageEmbed()
                     .setColor('#00ff00')
                     .setTitle('✅ Server Verified!')
                     .setDescription(`Server **${serverId}** has been successfully linked to this Discord server.`)
@@ -171,7 +171,7 @@ module.exports = {
                 await this.showServerStatus(interaction, userServers[0].serverId);
             } else {
                 // Multiple servers - show selection menu
-                const selectMenu = new StringSelectMenuBuilder()
+                const selectMenu = new MessageSelectMenu()
                     .setCustomId('select_server_status')
                     .setPlaceholder('Choose a server to view status')
                     .addOptions(
@@ -182,7 +182,7 @@ module.exports = {
                         }))
                     );
 
-                const row = new ActionRowBuilder().addComponents(selectMenu);
+                const row = new MessageActionRow().addComponents(selectMenu);
 
                 await interaction.editReply({
                     content: 'Select a server to view its status:',
@@ -213,7 +213,7 @@ module.exports = {
                 await this.showServerControls(interaction, userServers[0].serverId);
             } else {
                 // Multiple servers - show selection menu
-                const selectMenu = new StringSelectMenuBuilder()
+                const selectMenu = new MessageSelectMenu()
                     .setCustomId('select_server_control')
                     .setPlaceholder('Choose a server to control')
                     .addOptions(
@@ -224,7 +224,7 @@ module.exports = {
                         }))
                     );
 
-                const row = new ActionRowBuilder().addComponents(selectMenu);
+                const row = new MessageActionRow().addComponents(selectMenu);
 
                 await interaction.editReply({
                     content: 'Select a server to control:',
@@ -253,7 +253,7 @@ module.exports = {
 
             await database.removeServer(userId, serverId);
 
-            const embed = new EmbedBuilder()
+            const embed = new MessageEmbed()
                 .setColor('#ff9900')
                 .setTitle('🔗 Server Unlinked')
                 .setDescription(`Server **${serverId}** has been unlinked from this Discord server.`)
@@ -298,12 +298,12 @@ module.exports = {
             const embed = this.createStatusEmbed(server, resources, pterodactyl);
             
             // Add refresh button
-            const refreshButton = new ButtonBuilder()
+            const refreshButton = new MessageButton()
                 .setCustomId(`refresh_status_${serverId}`)
                 .setLabel('🔄 Refresh')
-                .setStyle(ButtonStyle.Secondary);
+                .setStyle('SECONDARY');
 
-            const row = new ActionRowBuilder().addComponents(refreshButton);
+            const row = new MessageActionRow().addComponents(refreshButton);
 
             await interaction.editReply({ embeds: [embed], components: [row] });
         } catch (error) {
@@ -325,7 +325,7 @@ module.exports = {
                 });
             }
 
-            const embed = new EmbedBuilder()
+            const embed = new MessageEmbed()
                 .setColor('#0099ff')
                 .setTitle(`🎮 Server Controls: ${serverDetails.data.name}`)
                 .setDescription(`Control your server **${serverId}**`)
@@ -335,27 +335,27 @@ module.exports = {
                 )
                 .setTimestamp();
 
-            const startButton = new ButtonBuilder()
+            const startButton = new MessageButton()
                 .setCustomId(`start_${serverId}`)
                 .setLabel('▶️ Start')
-                .setStyle(ButtonStyle.Success);
+                .setStyle('SUCCESS');
 
-            const stopButton = new ButtonBuilder()
+            const stopButton = new MessageButton()
                 .setCustomId(`stop_${serverId}`)
                 .setLabel('⏹️ Stop')
-                .setStyle(ButtonStyle.Danger);
+                .setStyle('DANGER');
 
-            const restartButton = new ButtonBuilder()
+            const restartButton = new MessageButton()
                 .setCustomId(`restart_${serverId}`)
                 .setLabel('🔄 Restart')
-                .setStyle(ButtonStyle.Primary);
+                .setStyle('PRIMARY');
 
-            const killButton = new ButtonBuilder()
+            const killButton = new MessageButton()
                 .setCustomId(`kill_${serverId}`)
                 .setLabel('💀 Kill')
-                .setStyle(ButtonStyle.Danger);
+                .setStyle('DANGER');
 
-            const row = new ActionRowBuilder().addComponents(startButton, stopButton, restartButton, killButton);
+            const row = new MessageActionRow().addComponents(startButton, stopButton, restartButton, killButton);
 
             await interaction.editReply({ embeds: [embed], components: [row] });
         } catch (error) {
@@ -376,7 +376,7 @@ module.exports = {
             `${pterodactyl.formatBytes(resources.disk_bytes)} / ${pterodactyl.formatBytes(server.limits.disk * 1024 * 1024)}` : 'N/A';
         const uptime = resources.uptime ? pterodactyl.formatUptime(resources.uptime / 1000) : 'N/A';
 
-        return new EmbedBuilder()
+        return new MessageEmbed()
             .setColor(statusColor)
             .setTitle(`📊 ${server.name}`)
             .setDescription(`Server Status Dashboard`)
