@@ -28,11 +28,21 @@ const rest = new REST().setToken(process.env.DISCORD_TOKEN);
     try {
         console.log(`🔄 Started refreshing ${commands.length} application (/) commands.`);
 
-        // The put method is used to fully refresh all commands in the guild with the current set
-        const data = await rest.put(
-            Routes.applicationCommands(process.env.CLIENT_ID),
-            { body: commands },
-        );
+        // Deploy to specific guild for faster testing (if GUILD_ID is provided)
+        if (process.env.GUILD_ID) {
+            const data = await rest.put(
+                Routes.applicationGuildCommands(process.env.CLIENT_ID, process.env.GUILD_ID),
+                { body: commands },
+            );
+            console.log(`✅ Successfully deployed ${data.length} commands to guild ${process.env.GUILD_ID}`);
+        } else {
+            // Deploy globally (takes up to 1 hour)
+            const data = await rest.put(
+                Routes.applicationCommands(process.env.CLIENT_ID),
+                { body: commands },
+            );
+            console.log(`✅ Successfully deployed ${data.length} global commands (may take up to 1 hour to appear)`);
+        }
 
         console.log(`✅ Successfully reloaded ${data.length} application (/) commands.`);
     } catch (error) {

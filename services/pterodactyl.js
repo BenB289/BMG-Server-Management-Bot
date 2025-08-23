@@ -122,6 +122,36 @@ class PterodactylAPI {
         }
     }
 
+    async findServerByUuid(serverUuid) {
+        try {
+            const serversResult = await this.getUserServers();
+            if (!serversResult.success) {
+                return serversResult;
+            }
+
+            const server = serversResult.data.find(s => 
+                s.uuid.toLowerCase() === serverUuid.toLowerCase()
+            );
+
+            if (!server) {
+                return {
+                    success: false,
+                    error: `Server with UUID "${serverUuid}" not found`
+                };
+            }
+
+            return {
+                success: true,
+                data: server
+            };
+        } catch (error) {
+            return {
+                success: false,
+                error: error.message
+            };
+        }
+    }
+
     formatBytes(bytes) {
         if (bytes === 0) return '0 B';
         const k = 1024;

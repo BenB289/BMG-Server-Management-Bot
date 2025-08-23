@@ -6,13 +6,15 @@
   "scripts": {
     "start": "node index.js",
     "dev": "nodemon index.js",
+    "deploy": "node deploy-commands.js && node index.js",
     "generate-report": "node scripts/generate-report.js"
   },
   "keywords": ["discord", "bot", "pterodactyl", "server", "management"],
   "author": "",
   "license": "MIT",
   "dependencies": {
-    "discord.js": "^13.17.1",
+    "discord.js": "^14.14.1",
+    "@discordjs/builders": "^1.7.0",
     "axios": "^1.6.2",
     "dotenv": "^16.3.1",
     "crypto": "^1.0.1",

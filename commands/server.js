@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, MessageEmbed, MessageActionRow, MessageSelectMenu, MessageButton } = require('discord.js');
+const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, StringSelectMenuBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const PterodactylAPI = require('../services/pterodactyl');
 const authService = require('../services/auth');
 const database = require('../config/database');
@@ -12,16 +12,16 @@ module.exports = {
                 .setName('link')
                 .setDescription('Link a server to this Discord')
                 .addStringOption(option =>
-                    option.setName('server_id')
-                        .setDescription('Your Pterodactyl server ID')
+                    option.setName('server_uuid')
+                        .setDescription('Your Pterodactyl server UUID')
                         .setRequired(true)))
         .addSubcommand(subcommand =>
             subcommand
                 .setName('verify')
                 .setDescription('Verify server ownership')
                 .addStringOption(option =>
-                    option.setName('server_id')
-                        .setDescription('Your Pterodactyl server ID')
+                    option.setName('server_uuid')
+                        .setDescription('Your Pterodactyl server UUID')
                         .setRequired(true))
                 .addStringOption(option =>
                     option.setName('code')
@@ -40,8 +40,8 @@ module.exports = {
                 .setName('unlink')
                 .setDescription('Unlink a server from this Discord')
                 .addStringOption(option =>
-                    option.setName('server_id')
-                        .setDescription('Server ID to unlink')
+                    option.setName('server_uuid')
+                        .setDescription('Server UUID to unlink')
                         .setRequired(true))),
 
     async execute(interaction) {
@@ -76,19 +76,31 @@ module.exports = {
     },
 
     async handleLink(interaction, userId) {
-        const serverId = interaction.options.getString('server_id');
+        const serverUuid = interaction.options.getString('server_uuid');
         
         try {
+            // Find server by UUID first
+            const pterodactyl = new PterodactylAPI();
+            const serverResult = await pterodactyl.findServerByUuid(serverUuid);
+            
+            if (!serverResult.success) {
+                return interaction.reply({
+                    content: `❌ ${serverResult.error}. Please check the server UUID and try again.`,
+                    ephemeral: true
+                });
+            }
+            
+            const serverId = serverResult.data.id;
             const verification = await authService.generateVerificationCode(userId, serverId);
             
-            const embed = new MessageEmbed()
+            const embed = new EmbedBuilder()
                 .setColor('#00ff00')
                 .setTitle('🔗 Server Linking')
-                .setDescription('To link your server, follow these steps:')
+                .setDescription(`Linking server: **${serverResult.data.name}**`)
                 .addFields(
                     { name: '1. Access your server console', value: 'Log into your Pterodactyl panel and access the server console.' },
                     { name: '2. Run the verification command', value: verification.instructions },
-                    { name: '3. Verify ownership', value: `Use \`/server verify server_id:${serverId} code:${verification.code}\`` }
+                    { name: '3. Verify ownership', value: `Use \`/server verify server_uuid:${serverUuid} code:${verification.code}\`` }
                 )
                 .setFooter({ text: 'Verification code expires in 24 hours' })
                 .setTimestamp();
@@ -103,17 +115,27 @@ module.exports = {
     },
 
     async handleVerify(interaction, userId) {
-        const serverId = interaction.options.getString('server_id');
+        const serverUuid = interaction.options.getString('server_uuid');
         const code = interaction.options.getString('code').toUpperCase();
 
         await interaction.deferReply({ ephemeral: true });
 
         try {
+            // Find server by UUID first
+            const pterodactyl = new PterodactylAPI();
+            const serverResult = await pterodactyl.findServerByUuid(serverUuid);
+            
+            if (!serverResult.success) {
+                return interaction.editReply({
+                    content: `❌ ${serverResult.error}. Please check the server UUID and try again.`
+                });
+            }
+            
+            const serverId = serverResult.data.id;
             const result = await authService.verifyServerOwnership(userId, serverId, code);
             
             if (result.success) {
                 // Get server details from Pterodactyl
-                const pterodactyl = new PterodactylAPI();
                 const serverDetails = await pterodactyl.getServerDetails(serverId);
                 
                 if (serverDetails.success) {
@@ -132,10 +154,10 @@ module.exports = {
                     });
                 }
 
-                const embed = new MessageEmbed()
+                const embed = new EmbedBuilder()
                     .setColor('#00ff00')
                     .setTitle('✅ Server Verified!')
-                    .setDescription(`Server **${serverId}** has been successfully linked to this Discord server.`)
+                    .setDescription(`Server **${serverResult.data.name}** has been successfully linked to this Discord server.`)
                     .addFields(
                         { name: 'Next Steps', value: 'Use `/server status` to view your server stats or `/server control` to manage it.' }
                     )
@@ -171,7 +193,7 @@ module.exports = {
                 await this.showServerStatus(interaction, userServers[0].serverId);
             } else {
                 // Multiple servers - show selection menu
-                const selectMenu = new MessageSelectMenu()
+                const selectMenu = new StringSelectMenuBuilder()
                     .setCustomId('select_server_status')
                     .setPlaceholder('Choose a server to view status')
                     .addOptions(
@@ -182,7 +204,7 @@ module.exports = {
                         }))
                     );
 
-                const row = new MessageActionRow().addComponents(selectMenu);
+                const row = new ActionRowBuilder().addComponents(selectMenu);
 
                 await interaction.editReply({
                     content: 'Select a server to view its status:',
@@ -213,7 +235,7 @@ module.exports = {
                 await this.showServerControls(interaction, userServers[0].serverId);
             } else {
                 // Multiple servers - show selection menu
-                const selectMenu = new MessageSelectMenu()
+                const selectMenu = new StringSelectMenuBuilder()
                     .setCustomId('select_server_control')
                     .setPlaceholder('Choose a server to control')
                     .addOptions(
@@ -224,7 +246,7 @@ module.exports = {
                         }))
                     );
 
-                const row = new MessageActionRow().addComponents(selectMenu);
+                const row = new ActionRowBuilder().addComponents(selectMenu);
 
                 await interaction.editReply({
                     content: 'Select a server to control:',
@@ -239,9 +261,21 @@ module.exports = {
     },
 
     async handleUnlink(interaction, userId) {
-        const serverId = interaction.options.getString('server_id');
+        const serverUuid = interaction.options.getString('server_uuid');
 
         try {
+            // Find server by UUID first
+            const pterodactyl = new PterodactylAPI();
+            const serverResult = await pterodactyl.findServerByUuid(serverUuid);
+            
+            if (!serverResult.success) {
+                return interaction.reply({
+                    content: `❌ ${serverResult.error}. Please check the server UUID and try again.`,
+                    ephemeral: true
+                });
+            }
+            
+            const serverId = serverResult.data.id;
             const hasPermission = await authService.hasServerPermission(userId, serverId);
             
             if (!hasPermission) {
@@ -253,10 +287,10 @@ module.exports = {
 
             await database.removeServer(userId, serverId);
 
-            const embed = new MessageEmbed()
+            const embed = new EmbedBuilder()
                 .setColor('#ff9900')
                 .setTitle('🔗 Server Unlinked')
-                .setDescription(`Server **${serverId}** has been unlinked from this Discord server.`)
+                .setDescription(`Server **${serverResult.data.name}** has been unlinked from this Discord server.`)
                 .setTimestamp();
 
             await interaction.reply({ embeds: [embed], ephemeral: true });
@@ -298,12 +332,12 @@ module.exports = {
             const embed = this.createStatusEmbed(server, resources, pterodactyl);
             
             // Add refresh button
-            const refreshButton = new MessageButton()
+            const refreshButton = new ButtonBuilder()
                 .setCustomId(`refresh_status_${serverId}`)
                 .setLabel('🔄 Refresh')
-                .setStyle('SECONDARY');
+                .setStyle(ButtonStyle.Secondary);
 
-            const row = new MessageActionRow().addComponents(refreshButton);
+            const row = new ActionRowBuilder().addComponents(refreshButton);
 
             await interaction.editReply({ embeds: [embed], components: [row] });
         } catch (error) {
@@ -325,7 +359,7 @@ module.exports = {
                 });
             }
 
-            const embed = new MessageEmbed()
+            const embed = new EmbedBuilder()
                 .setColor('#0099ff')
                 .setTitle(`🎮 Server Controls: ${serverDetails.data.name}`)
                 .setDescription(`Control your server **${serverId}**`)
@@ -335,27 +369,27 @@ module.exports = {
                 )
                 .setTimestamp();
 
-            const startButton = new MessageButton()
+            const startButton = new ButtonBuilder()
                 .setCustomId(`start_${serverId}`)
                 .setLabel('▶️ Start')
-                .setStyle('SUCCESS');
+                .setStyle(ButtonStyle.Success);
 
-            const stopButton = new MessageButton()
+            const stopButton = new ButtonBuilder()
                 .setCustomId(`stop_${serverId}`)
                 .setLabel('⏹️ Stop')
-                .setStyle('DANGER');
+                .setStyle(ButtonStyle.Danger);
 
-            const restartButton = new MessageButton()
+            const restartButton = new ButtonBuilder()
                 .setCustomId(`restart_${serverId}`)
                 .setLabel('🔄 Restart')
-                .setStyle('PRIMARY');
+                .setStyle(ButtonStyle.Primary);
 
-            const killButton = new MessageButton()
+            const killButton = new ButtonBuilder()
                 .setCustomId(`kill_${serverId}`)
                 .setLabel('💀 Kill')
-                .setStyle('DANGER');
+                .setStyle(ButtonStyle.Danger);
 
-            const row = new MessageActionRow().addComponents(startButton, stopButton, restartButton, killButton);
+            const row = new ActionRowBuilder().addComponents(startButton, stopButton, restartButton, killButton);
 
             await interaction.editReply({ embeds: [embed], components: [row] });
         } catch (error) {
@@ -376,7 +410,7 @@ module.exports = {
             `${pterodactyl.formatBytes(resources.disk_bytes)} / ${pterodactyl.formatBytes(server.limits.disk * 1024 * 1024)}` : 'N/A';
         const uptime = resources.uptime ? pterodactyl.formatUptime(resources.uptime / 1000) : 'N/A';
 
-        return new MessageEmbed()
+        return new EmbedBuilder()
             .setColor(statusColor)
             .setTitle(`📊 ${server.name}`)
             .setDescription(`Server Status Dashboard`)

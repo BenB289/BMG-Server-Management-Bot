@@ -8,7 +8,7 @@ module.exports = {
         console.log(`📊 Serving ${client.guilds.cache.size} servers`);
         
         // Set bot status
-        client.user.setActivity('Pterodactyl servers', { type: 'WATCHING' });
+        client.user.setActivity('Pterodactyl servers', { type: 3 }); // 3 = WATCHING
         
         // Start the auto-update system
         const updateSystem = require('../services/updateSystem');
