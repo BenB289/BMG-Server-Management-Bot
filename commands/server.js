@@ -68,12 +68,95 @@ module.exports = {
         }
     },
 
+    async promptForApiKey(interaction, userId) {
+        const embed = new EmbedBuilder()
+            .setColor('#ff9900')
+            .setTitle('🔑 API Key Required')
+            .setDescription('To use this bot, you need to provide your BMG Hosting client API key.')
+            .addFields(
+                { name: '📋 How to get your API key:', value: '1. Go to https://cp.bmghosting.com\n2. Click your profile (top right)\n3. Go to **Account Settings**\n4. Navigate to **API Credentials**\n5. Create **Account API Key** (not Application API Key)\n6. Copy the key (starts with `ptlc_`)' },
+                { name: '💬 Send your API key:', value: 'Reply to this message with your API key and I\'ll set it up automatically.' }
+            )
+            .setFooter({ text: 'Your API key will be encrypted and stored securely' })
+            .setTimestamp();
+
+        await interaction.reply({ embeds: [embed], ephemeral: true });
+        
+        // Set up a collector to wait for the user's API key
+        const filter = (msg) => msg.author.id === userId && msg.content.startsWith('ptlc_');
+        const collector = interaction.channel.createMessageCollector({ filter, time: 300000, max: 1 });
+
+        collector.on('collect', async (message) => {
+            const apiKey = message.content.trim();
+            const panelUrl = 'https://cp.bmghosting.com';
+
+            // Delete the user's message for security
+            try {
+                await message.delete();
+            } catch (error) {
+                // Ignore if we can't delete (permissions)
+            }
+
+            try {
+                // Test the API key
+                const testAPI = new PterodactylAPI(panelUrl, apiKey);
+                const testResult = await testAPI.getUserServers();
+
+                if (!testResult.success) {
+                    return interaction.followUp({
+                        content: `❌ Failed to connect to BMG Hosting panel. Please check your API key.\n\nError: ${testResult.error}`,
+                        ephemeral: true
+                    });
+                }
+
+                // Save user's API credentials
+                await database.saveUserCredentials(userId, {
+                    apiKey: apiKey,
+                    panelUrl: panelUrl,
+                    verifiedAt: Date.now()
+                });
+
+                const successEmbed = new EmbedBuilder()
+                    .setColor('#00ff00')
+                    .setTitle('✅ API Key Setup Complete!')
+                    .setDescription('Your BMG Hosting credentials have been saved securely.')
+                    .addFields(
+                        { name: 'Servers Found', value: testResult.data.length.toString(), inline: true },
+                        { name: 'Ready to Use', value: 'You can now use all server commands!' }
+                    )
+                    .setTimestamp();
+
+                await interaction.followUp({ embeds: [successEmbed], ephemeral: true });
+            } catch (error) {
+                await interaction.followUp({
+                    content: '❌ Failed to setup API key. Please try again.',
+                    ephemeral: true
+                });
+            }
+        });
+
+        collector.on('end', (collected) => {
+            if (collected.size === 0) {
+                interaction.followUp({
+                    content: '⏰ API key setup timed out. Please run the command again when you have your API key ready.',
+                    ephemeral: true
+                });
+            }
+        });
+    },
+
     async handleLink(interaction, userId) {
         const serverUuid = interaction.options.getString('server_uuid');
         
         try {
-            // Find server by UUID first
-            const pterodactyl = new PterodactylAPI();
+            // Get user's API credentials
+            const userCredentials = await database.getUserCredentials(userId);
+            if (!userCredentials) {
+                return this.promptForApiKey(interaction, userId);
+            }
+
+            // Find server by UUID using user's credentials
+            const pterodactyl = new PterodactylAPI(userCredentials.panelUrl, userCredentials.apiKey);
             const serverResult = await pterodactyl.findServerByUuid(serverUuid);
             
             if (!serverResult.success) {
@@ -114,8 +197,14 @@ module.exports = {
         await interaction.deferReply({ ephemeral: true });
 
         try {
-            // Find server by UUID first
-            const pterodactyl = new PterodactylAPI();
+            // Get user's API credentials
+            const userCredentials = await database.getUserCredentials(userId);
+            if (!userCredentials) {
+                return this.promptForApiKey(interaction, userId);
+            }
+
+            // Find server by UUID using user's credentials
+            const pterodactyl = new PterodactylAPI(userCredentials.panelUrl, userCredentials.apiKey);
             const serverResult = await pterodactyl.findServerByUuid(serverUuid);
             
             if (!serverResult.success) {
@@ -173,6 +262,12 @@ module.exports = {
         await interaction.deferReply();
 
         try {
+            // Get user's API credentials
+            const userCredentials = await database.getUserCredentials(userId);
+            if (!userCredentials) {
+                return this.promptForApiKey(interaction, userId);
+            }
+
             const userServers = await database.getUserServers(userId);
             
             if (userServers.length === 0) {
@@ -183,7 +278,7 @@ module.exports = {
 
             if (userServers.length === 1) {
                 // Single server - show dashboard directly
-                await this.showServerDashboard(interaction, userServers[0].serverId);
+                await this.showServerDashboard(interaction, userServers[0].serverId, userCredentials);
             } else {
                 // Multiple servers - show selection menu
                 const selectMenu = new StringSelectMenuBuilder()
@@ -215,8 +310,14 @@ module.exports = {
         const serverUuid = interaction.options.getString('server_uuid');
 
         try {
-            // Find server by UUID first
-            const pterodactyl = new PterodactylAPI();
+            // Get user's API credentials
+            const userCredentials = await database.getUserCredentials(userId);
+            if (!userCredentials) {
+                return this.promptForApiKey(interaction, userId);
+            }
+
+            // Find server by UUID using user's credentials
+            const pterodactyl = new PterodactylAPI(userCredentials.panelUrl, userCredentials.apiKey);
             const serverResult = await pterodactyl.findServerByUuid(serverUuid);
             
             if (!serverResult.success) {
@@ -298,8 +399,19 @@ module.exports = {
         }
     },
 
-    async showServerDashboard(interaction, serverId) {
-        const pterodactyl = new PterodactylAPI();
+    async showServerDashboard(interaction, serverId, userCredentials = null) {
+        // Get user credentials if not provided
+        if (!userCredentials) {
+            const userId = interaction.user.id;
+            userCredentials = await database.getUserCredentials(userId);
+            if (!userCredentials) {
+                return interaction.editReply({
+                    content: '❌ You need to setup your API key first. Use `/server setup` to configure your Pterodactyl credentials.'
+                });
+            }
+        }
+        
+        const pterodactyl = new PterodactylAPI(userCredentials.panelUrl, userCredentials.apiKey);
         
         try {
             const serverDetails = await pterodactyl.getServerDetails(serverId);

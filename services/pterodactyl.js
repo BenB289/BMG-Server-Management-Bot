@@ -2,9 +2,9 @@ const axios = require('axios');
 require('dotenv').config();
 
 class PterodactylAPI {
-    constructor() {
-        this.baseURL = process.env.PTERODACTYL_URL;
-        this.apiKey = process.env.PTERODACTYL_API_KEY;
+    constructor(baseURL = null, apiKey = null) {
+        this.baseURL = baseURL || process.env.PTERODACTYL_URL;
+        this.apiKey = apiKey || process.env.PTERODACTYL_API_KEY;
         this.client = axios.create({
             baseURL: `${this.baseURL}/api/client`,
             headers: {
