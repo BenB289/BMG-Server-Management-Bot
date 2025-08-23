@@ -28,16 +28,18 @@ const rest = new REST().setToken(process.env.DISCORD_TOKEN);
     try {
         console.log(`🔄 Started refreshing ${commands.length} application (/) commands.`);
 
+        let data;
+        
         // Deploy to specific guild for faster testing (if GUILD_ID is provided)
         if (process.env.GUILD_ID) {
-            const data = await rest.put(
+            data = await rest.put(
                 Routes.applicationGuildCommands(process.env.CLIENT_ID, process.env.GUILD_ID),
                 { body: commands },
             );
             console.log(`✅ Successfully deployed ${data.length} commands to guild ${process.env.GUILD_ID}`);
         } else {
             // Deploy globally (takes up to 1 hour)
-            const data = await rest.put(
+            data = await rest.put(
                 Routes.applicationCommands(process.env.CLIENT_ID),
                 { body: commands },
             );
