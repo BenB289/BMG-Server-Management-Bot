@@ -29,12 +29,8 @@ module.exports = {
                         .setRequired(true)))
         .addSubcommand(subcommand =>
             subcommand
-                .setName('status')
-                .setDescription('Display server status and stats'))
-        .addSubcommand(subcommand =>
-            subcommand
-                .setName('control')
-                .setDescription('Control your server (start/stop/restart)'))
+                .setName('dashboard')
+                .setDescription('View server status and control panel'))
         .addSubcommand(subcommand =>
             subcommand
                 .setName('unlink')
@@ -63,11 +59,8 @@ module.exports = {
             case 'verify':
                 await this.handleVerify(interaction, userId);
                 break;
-            case 'status':
-                await this.handleStatus(interaction, userId);
-                break;
-            case 'control':
-                await this.handleControl(interaction, userId);
+            case 'dashboard':
+                await this.handleDashboard(interaction, userId);
                 break;
             case 'unlink':
                 await this.handleUnlink(interaction, userId);
@@ -176,7 +169,7 @@ module.exports = {
         }
     },
 
-    async handleStatus(interaction, userId) {
+    async handleDashboard(interaction, userId) {
         await interaction.deferReply();
 
         try {
@@ -189,13 +182,13 @@ module.exports = {
             }
 
             if (userServers.length === 1) {
-                // Single server - show status directly
-                await this.showServerStatus(interaction, userServers[0].serverId);
+                // Single server - show dashboard directly
+                await this.showServerDashboard(interaction, userServers[0].serverId);
             } else {
                 // Multiple servers - show selection menu
                 const selectMenu = new StringSelectMenuBuilder()
-                    .setCustomId('select_server_status')
-                    .setPlaceholder('Choose a server to view status')
+                    .setCustomId('select_server_dashboard')
+                    .setPlaceholder('Choose a server to view dashboard')
                     .addOptions(
                         userServers.map(server => ({
                             label: server.serverName || server.serverId,
@@ -207,49 +200,7 @@ module.exports = {
                 const row = new ActionRowBuilder().addComponents(selectMenu);
 
                 await interaction.editReply({
-                    content: 'Select a server to view its status:',
-                    components: [row]
-                });
-            }
-        } catch (error) {
-            await interaction.editReply({
-                content: '❌ Failed to fetch server information.'
-            });
-        }
-    },
-
-    async handleControl(interaction, userId) {
-        await interaction.deferReply();
-
-        try {
-            const userServers = await database.getUserServers(userId);
-            
-            if (userServers.length === 0) {
-                return interaction.editReply({
-                    content: '❌ No servers linked. Use `/server link` to link a server first.'
-                });
-            }
-
-            if (userServers.length === 1) {
-                // Single server - show controls directly
-                await this.showServerControls(interaction, userServers[0].serverId);
-            } else {
-                // Multiple servers - show selection menu
-                const selectMenu = new StringSelectMenuBuilder()
-                    .setCustomId('select_server_control')
-                    .setPlaceholder('Choose a server to control')
-                    .addOptions(
-                        userServers.map(server => ({
-                            label: server.serverName || server.serverId,
-                            description: `Server ID: ${server.serverId}`,
-                            value: server.serverId
-                        }))
-                    );
-
-                const row = new ActionRowBuilder().addComponents(selectMenu);
-
-                await interaction.editReply({
-                    content: 'Select a server to control:',
+                    content: 'Select a server to view its dashboard:',
                     components: [row]
                 });
             }
@@ -343,6 +294,58 @@ module.exports = {
         } catch (error) {
             await interaction.editReply({
                 content: '❌ Error fetching server status.'
+            });
+        }
+    },
+
+    async showServerDashboard(interaction, serverId) {
+        const pterodactyl = new PterodactylAPI();
+        
+        try {
+            const serverDetails = await pterodactyl.getServerDetails(serverId);
+            const serverResources = await pterodactyl.getServerResources(serverId);
+            
+            if (!serverDetails.success || !serverResources.success) {
+                return interaction.editReply({
+                    content: '❌ Failed to fetch server data.'
+                });
+            }
+
+            const embed = this.createStatusEmbed(serverDetails.data, serverResources.data, pterodactyl);
+
+            // Create control buttons
+            const startButton = new ButtonBuilder()
+                .setCustomId(`start_${serverId}`)
+                .setLabel('▶️ Start')
+                .setStyle(ButtonStyle.Success);
+
+            const stopButton = new ButtonBuilder()
+                .setCustomId(`stop_${serverId}`)
+                .setLabel('⏹️ Stop')
+                .setStyle(ButtonStyle.Danger);
+
+            const restartButton = new ButtonBuilder()
+                .setCustomId(`restart_${serverId}`)
+                .setLabel('🔄 Restart')
+                .setStyle(ButtonStyle.Primary);
+
+            const killButton = new ButtonBuilder()
+                .setCustomId(`kill_${serverId}`)
+                .setLabel('💀 Kill')
+                .setStyle(ButtonStyle.Danger);
+
+            const refreshButton = new ButtonBuilder()
+                .setCustomId(`refresh_${serverId}`)
+                .setLabel('🔄 Refresh')
+                .setStyle(ButtonStyle.Secondary);
+
+            const row1 = new ActionRowBuilder().addComponents(startButton, stopButton, restartButton, killButton);
+            const row2 = new ActionRowBuilder().addComponents(refreshButton);
+
+            await interaction.editReply({ embeds: [embed], components: [row1, row2] });
+        } catch (error) {
+            await interaction.editReply({
+                content: '❌ Error loading server dashboard.'
             });
         }
     },

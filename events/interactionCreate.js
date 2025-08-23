@@ -67,9 +67,22 @@ async function handleButton(interaction) {
             content: '⚠️ You are being rate limited. Please wait a moment.',
             ephemeral: true
         });
-    }
+    } else if (customId.startsWith('select_server_dashboard')) {
+        const serverId = interaction.values[0];
+        
+        // Check permissions
+        const hasPermission = await authService.hasServerPermission(userId, serverId);
+        if (!hasPermission) {
+            return interaction.reply({
+                content: '❌ You do not have permission to view this server.',
+                ephemeral: true
+            });
+        }
 
-    if (customId.startsWith('refresh_status_')) {
+        await interaction.deferUpdate();
+        const serverCommand = require('../commands/server');
+        await serverCommand.showServerDashboard(interaction, serverId);
+    } else if (customId.startsWith('refresh_status_')) {
         const serverId = customId.replace('refresh_status_', '');
         
         // Check permissions
@@ -84,6 +97,21 @@ async function handleButton(interaction) {
         await interaction.deferUpdate();
         const serverCommand = require('../commands/server');
         await serverCommand.showServerStatus(interaction, serverId);
+    } else if (customId.startsWith('refresh_')) {
+        const serverId = customId.replace('refresh_', '');
+        
+        // Check permissions
+        const hasPermission = await authService.hasServerPermission(userId, serverId);
+        if (!hasPermission) {
+            return interaction.reply({
+                content: '❌ You do not have permission to access this server.',
+                ephemeral: true
+            });
+        }
+
+        await interaction.deferUpdate();
+        const serverCommand = require('../commands/server');
+        await serverCommand.showServerDashboard(interaction, serverId);
     } else if (customId.startsWith('start_') || customId.startsWith('stop_') || 
                customId.startsWith('restart_') || customId.startsWith('kill_')) {
         
