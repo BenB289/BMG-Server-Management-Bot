@@ -403,27 +403,18 @@ module.exports = {
     },
 
     createStatusEmbed(server, resources, pterodactyl) {
-        console.log('Server data:', JSON.stringify(server, null, 2));
-        console.log('Resources data:', JSON.stringify(resources, null, 2));
-        
         const statusColor = resources.current_state === 'running' ? '#00ff00' : 
                            resources.current_state === 'stopped' ? '#ff0000' : '#ffff00';
 
-        // Handle different possible data structures
-        const cpuUsage = resources.cpu_absolute !== undefined ? `${resources.cpu_absolute.toFixed(2)}%` : 
-                        resources.cpu !== undefined ? `${resources.cpu.toFixed(2)}%` : 'N/A';
+        // Access the nested resources data
+        const resourceData = resources.resources || {};
         
-        const memoryUsage = resources.memory_bytes !== undefined ? 
-            `${pterodactyl.formatBytes(resources.memory_bytes)} / ${pterodactyl.formatBytes(server.limits.memory * 1024 * 1024)}` :
-            resources.memory !== undefined ?
-            `${pterodactyl.formatBytes(resources.memory)} / ${pterodactyl.formatBytes(server.limits.memory * 1024 * 1024)}` : 'N/A';
-        
-        const diskUsage = resources.disk_bytes !== undefined ? 
-            `${pterodactyl.formatBytes(resources.disk_bytes)} / ${pterodactyl.formatBytes(server.limits.disk * 1024 * 1024)}` :
-            resources.disk !== undefined ?
-            `${pterodactyl.formatBytes(resources.disk)} / ${pterodactyl.formatBytes(server.limits.disk * 1024 * 1024)}` : 'N/A';
-        
-        const uptime = resources.uptime !== undefined ? pterodactyl.formatUptime(resources.uptime / 1000) : 'N/A';
+        const cpuUsage = resourceData.cpu_absolute !== undefined ? `${resourceData.cpu_absolute.toFixed(2)}%` : 'N/A';
+        const memoryUsage = resourceData.memory_bytes !== undefined ? 
+            `${pterodactyl.formatBytes(resourceData.memory_bytes)} / ${pterodactyl.formatBytes(server.limits.memory * 1024 * 1024)}` : 'N/A';
+        const diskUsage = resourceData.disk_bytes !== undefined ? 
+            `${pterodactyl.formatBytes(resourceData.disk_bytes)} / ${pterodactyl.formatBytes(server.limits.disk * 1024 * 1024)}` : 'N/A';
+        const uptime = resourceData.uptime !== undefined ? pterodactyl.formatUptime(resourceData.uptime / 1000) : 'N/A';
 
         return new EmbedBuilder()
             .setColor(statusColor)
@@ -433,9 +424,9 @@ module.exports = {
                 { name: '🟢 Status', value: resources.current_state || 'Unknown', inline: true },
                 { name: '⏱️ Uptime', value: uptime, inline: true },
                 { name: '🆔 Server ID', value: server.identifier, inline: true },
-                { name: '💾 CPU Usage', value: cpuUsage, inline: true },
-                { name: '🧠 Memory Usage', value: memoryUsage, inline: true },
-                { name: '💿 Disk Usage', value: diskUsage, inline: true }
+                { name: '💾 CPU', value: cpuUsage, inline: true },
+                { name: '🧠 Memory', value: memoryUsage, inline: true },
+                { name: '💿 Disk', value: diskUsage, inline: true }
             )
             .setFooter({ text: 'Last updated' })
             .setTimestamp();
