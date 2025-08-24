@@ -38,7 +38,11 @@ module.exports = {
                 .addStringOption(option =>
                     option.setName('server_uuid')
                         .setDescription('Server UUID to unlink')
-                        .setRequired(true))),
+                        .setRequired(true)))
+        .addSubcommand(subcommand =>
+            subcommand
+                .setName('status')
+                .setDescription('View online status of all linked servers')),
 
     async execute(interaction) {
         const subcommand = interaction.options.getSubcommand();
@@ -64,6 +68,9 @@ module.exports = {
                 break;
             case 'unlink':
                 await this.handleUnlink(interaction, userId);
+                break;
+            case 'status':
+                await this.handleStatus(interaction, userId);
                 break;
         }
     },
@@ -147,8 +154,17 @@ module.exports = {
 
     async handleLink(interaction, userId) {
         const serverUuid = interaction.options.getString('server_uuid');
-        
+
         try {
+            // Check if user is verified (owns any verified server)
+            const isVerified = await authService.isUserVerified(userId);
+            if (!isVerified) {
+                return interaction.reply({
+                    content: '❌ You must be a verified server owner to link servers. Please verify your first server ownership through the BMG Hosting panel.',
+                    ephemeral: true
+                });
+            }
+
             // Get user's API credentials
             const userCredentials = await database.getUserCredentials(userId);
             if (!userCredentials) {
@@ -192,11 +208,12 @@ module.exports = {
 
     async handleVerify(interaction, userId) {
         const serverUuid = interaction.options.getString('server_uuid');
-        const code = interaction.options.getString('code').toUpperCase();
+        const verificationCode = interaction.options.getString('code');
 
-        await interaction.deferReply({ ephemeral: true });
+        await interaction.deferReply();
 
         try {
+            // Allow verification for new users (this is how they become verified)
             // Get user's API credentials
             const userCredentials = await database.getUserCredentials(userId);
             if (!userCredentials) {
@@ -241,7 +258,7 @@ module.exports = {
                     .setTitle('✅ Server Verified!')
                     .setDescription(`Server **${serverResult.data.name}** has been successfully linked to this Discord server.`)
                     .addFields(
-                        { name: 'Next Steps', value: 'Use `/server status` to view your server stats or `/server control` to manage it.' }
+                        { name: 'Next Steps', value: 'Use `/server dashboard` to view your server stats and controls.' }
                     )
                     .setTimestamp();
 
@@ -262,6 +279,14 @@ module.exports = {
         await interaction.deferReply();
 
         try {
+            // Check if user is verified (owns any verified server)
+            const isVerified = await authService.isUserVerified(userId);
+            if (!isVerified) {
+                return interaction.editReply({
+                    content: '❌ You must be a verified server owner to view dashboards. Please verify your server ownership first using `/server verify`.',
+                });
+            }
+
             // Get user's API credentials
             const userCredentials = await database.getUserCredentials(userId);
             if (!userCredentials) {
@@ -310,6 +335,15 @@ module.exports = {
         const serverUuid = interaction.options.getString('server_uuid');
 
         try {
+            // Check if user is verified (owns any verified server)
+            const isVerified = await authService.isUserVerified(userId);
+            if (!isVerified) {
+                return interaction.reply({
+                    content: '❌ You must be a verified server owner to unlink servers.',
+                    ephemeral: true
+                });
+            }
+
             // Get user's API credentials
             const userCredentials = await database.getUserCredentials(userId);
             if (!userCredentials) {
@@ -383,15 +417,30 @@ module.exports = {
 
             const embed = this.createStatusEmbed(server, resources, pterodactyl);
             
-            // Add refresh button
-            const refreshButton = new ButtonBuilder()
-                .setCustomId(`refresh_status_${serverId}`)
-                .setLabel('🔄 Refresh')
-                .setStyle(ButtonStyle.Secondary);
-
-            const row = new ActionRowBuilder().addComponents(refreshButton);
-
-            await interaction.editReply({ embeds: [embed], components: [row] });
+            await interaction.editReply({ embeds: [embed] });
+            
+            // Auto-refresh every 10 seconds
+            const autoRefresh = setInterval(async () => {
+                try {
+                    const [updatedDetails, updatedResources] = await Promise.all([
+                        pterodactyl.getServerDetails(serverId),
+                        pterodactyl.getServerResources(serverId)
+                    ]);
+                    
+                    if (updatedDetails.success && updatedResources.success) {
+                        const updatedEmbed = this.createStatusEmbed(updatedDetails.data, updatedResources.data, pterodactyl);
+                        await interaction.editReply({ embeds: [updatedEmbed] });
+                    }
+                } catch (error) {
+                    // Stop auto-refresh on error
+                    clearInterval(autoRefresh);
+                }
+            }, 10000);
+            
+            // Stop auto-refresh after 5 minutes to prevent excessive API calls
+            setTimeout(() => {
+                clearInterval(autoRefresh);
+            }, 300000);
         } catch (error) {
             await interaction.editReply({
                 content: '❌ Error fetching server status.'
@@ -446,19 +495,144 @@ module.exports = {
                 .setLabel('💀 Kill')
                 .setStyle(ButtonStyle.Danger);
 
-            const refreshButton = new ButtonBuilder()
-                .setCustomId(`refresh_${serverId}`)
-                .setLabel('🔄 Refresh')
-                .setStyle(ButtonStyle.Secondary);
 
-            const row1 = new ActionRowBuilder().addComponents(startButton, stopButton, restartButton, killButton);
-            const row2 = new ActionRowBuilder().addComponents(refreshButton);
+            const row = new ActionRowBuilder().addComponents(startButton, stopButton, restartButton, killButton);
 
-            await interaction.editReply({ embeds: [embed], components: [row1, row2] });
+            await interaction.editReply({ embeds: [embed], components: [row] });
+            
+            // Auto-refresh every 10 seconds
+            const autoRefresh = setInterval(async () => {
+                try {
+                    const [updatedDetails, updatedResources] = await Promise.all([
+                        pterodactyl.getServerDetails(serverId),
+                        pterodactyl.getServerResources(serverId)
+                    ]);
+                    
+                    if (updatedDetails.success && updatedResources.success) {
+                        const updatedEmbed = this.createStatusEmbed(updatedDetails.data, updatedResources.data, pterodactyl);
+                        await interaction.editReply({ embeds: [updatedEmbed], components: [row] });
+                    }
+                } catch (error) {
+                    // Stop auto-refresh on error
+                    clearInterval(autoRefresh);
+                }
+            }, 10000);
+            
+            // Stop auto-refresh after 5 minutes to prevent excessive API calls
+            setTimeout(() => {
+                clearInterval(autoRefresh);
+            }, 300000);
         } catch (error) {
             await interaction.editReply({
                 content: '❌ Error loading server dashboard.'
             });
+        }
+    },
+
+    async handleStatus(interaction, userId) {
+        await interaction.deferReply();
+
+        try {
+            // Check if user is verified (owns any verified server)
+            const isVerified = await authService.isUserVerified(userId);
+            if (!isVerified) {
+                return interaction.editReply({
+                    content: '❌ You must be a verified server owner to view server status. Please verify your server ownership first using `/server verify`.',
+                });
+            }
+
+            // Get user's API credentials
+            const userCredentials = await database.getUserCredentials(userId);
+            if (!userCredentials) {
+                return this.promptForApiKey(interaction, userId);
+            }
+
+            const userServers = await database.getUserServers(userId);
+            
+            if (userServers.length === 0) {
+                return interaction.editReply({
+                    content: '❌ You have no linked servers. Use `/server link` to link a server first.'
+                });
+            }
+
+            const pterodactyl = new PterodactylAPI(userCredentials.panelUrl, userCredentials.apiKey);
+            
+            // Fetch status for all servers
+            const serverStatuses = [];
+            for (const server of userServers) {
+                try {
+                    const serverDetails = await pterodactyl.getServerDetails(server.serverId);
+                    const serverResources = await pterodactyl.getServerResources(server.serverId);
+                    
+                    if (serverDetails.success && serverResources.success) {
+                        const status = serverResources.data.current_state;
+                        const statusEmoji = this.getStatusEmoji(status);
+                        
+                        serverStatuses.push({
+                            name: serverDetails.data.name,
+                            uuid: server.serverId,
+                            status: status,
+                            emoji: statusEmoji
+                        });
+                    } else {
+                        serverStatuses.push({
+                            name: server.serverName || 'Unknown Server',
+                            uuid: server.serverId,
+                            status: 'unknown',
+                            emoji: '❓'
+                        });
+                    }
+                } catch (error) {
+                    serverStatuses.push({
+                        name: server.serverName || 'Unknown Server',
+                        uuid: server.serverId,
+                        status: 'error',
+                        emoji: '❌'
+                    });
+                }
+            }
+
+            // Create status embed
+            const embed = new EmbedBuilder()
+                .setColor('#0099ff')
+                .setTitle('📊 Server Status Overview')
+                .setDescription('Current status of all your linked servers')
+                .setTimestamp();
+
+            // Add server status fields
+            for (const server of serverStatuses) {
+                const statusText = server.status.charAt(0).toUpperCase() + server.status.slice(1);
+                embed.addFields({
+                    name: `${server.emoji} ${server.name}`,
+                    value: `Status: **${statusText}**\nUUID: \`${server.uuid}\``,
+                    inline: true
+                });
+            }
+
+            // Add summary
+            const onlineCount = serverStatuses.filter(s => s.status === 'running').length;
+            const totalCount = serverStatuses.length;
+            embed.addFields({
+                name: '📈 Summary',
+                value: `**${onlineCount}/${totalCount}** servers online`,
+                inline: false
+            });
+
+            await interaction.editReply({ embeds: [embed] });
+        } catch (error) {
+            await interaction.editReply({
+                content: '❌ Failed to fetch server status information.'
+            });
+        }
+    },
+
+    getStatusEmoji(status) {
+        switch (status) {
+            case 'running': return '🟢';
+            case 'starting': return '🟡';
+            case 'stopping': return '🟠';
+            case 'offline': return '🔴';
+            default: return '❓';
         }
     },
 
@@ -528,6 +702,11 @@ module.exports = {
             `${pterodactyl.formatBytes(resourceData.disk_bytes)} / ${pterodactyl.formatBytes(server.limits.disk * 1024 * 1024)}` : 'N/A';
         const uptime = resourceData.uptime !== undefined ? pterodactyl.formatUptime(resourceData.uptime / 1000) : 'N/A';
 
+        // Get server IP address from relationships
+        const serverIP = server.relationships?.allocations?.data?.[0]?.attributes?.ip || 'N/A';
+        const serverPort = server.relationships?.allocations?.data?.[0]?.attributes?.port || 'N/A';
+        const connectionInfo = serverIP !== 'N/A' && serverPort !== 'N/A' ? `${serverIP}:${serverPort}` : 'N/A';
+
         return new EmbedBuilder()
             .setColor(statusColor)
             .setTitle(`📊 ${server.name}`)
@@ -535,7 +714,7 @@ module.exports = {
             .addFields(
                 { name: '🟢 Status', value: resources.current_state || 'Unknown', inline: true },
                 { name: '⏱️ Uptime', value: uptime, inline: true },
-                { name: '🆔 Server ID', value: server.identifier, inline: true },
+                { name: '🌐 IP Address', value: connectionInfo, inline: true },
                 { name: '💾 CPU', value: cpuUsage, inline: true },
                 { name: '🧠 Memory', value: memoryUsage, inline: true },
                 { name: '💿 Disk', value: diskUsage, inline: true }

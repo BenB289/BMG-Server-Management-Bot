@@ -208,6 +208,17 @@ class Database {
         decrypted += decipher.final('utf8');
         return decrypted;
     }
+
+    getAllUsers() {
+        if (!fs.existsSync(this.credentialsFile)) {
+            return [];
+        }
+        
+        const data = fs.readFileSync(this.credentialsFile, 'utf8');
+        const credentials = JSON.parse(data);
+        
+        return Object.keys(credentials).map(userId => ({ userId }));
+    }
 }
 
 module.exports = new Database();

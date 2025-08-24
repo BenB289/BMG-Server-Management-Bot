@@ -1,32 +1,31 @@
-# Pterodactyl Discord Bot
+# BMG Server Management Bot
 
-A powerful Discord bot that allows users to manage their Pterodactyl panel servers directly from Discord. Features real-time server monitoring, control commands, and secure server verification.
+A Discord bot designed specifically for BMG Hosting customers to manage their Pterodactyl servers directly from Discord. Features per-user API keys, real-time monitoring, and a two-tier permission system.
 
 ## Features
 
-- 🔗 **Server Linking**: Securely link Pterodactyl servers to Discord
-- 📊 **Real-time Stats**: Live server monitoring with auto-updating embeds
-- 🎮 **Server Control**: Start, stop, restart, and kill servers
-- 🔒 **Secure Authentication**: Verification system to ensure server ownership
-- 📈 **Auto-updating**: Status messages update automatically every 30 seconds
-- 📋 **Report Generation**: Generate JSON and PDF reports of connected servers
-- ⚡ **Rate Limiting**: Built-in protection against spam and abuse
+- 🔗 **Server Linking**: Link servers using UUIDs with secure verification
+- 📊 **Live Dashboard**: Auto-refreshing server stats every 10 seconds
+- 🎮 **Server Control**: Start, stop, restart, and kill servers via buttons
+- 🔒 **Two-Tier Permissions**: Verified users create dashboards, anyone can use controls
+- 👥 **Multi-User Support**: Each user provides their own BMG Hosting API key
+- 🏢 **BMG Hosting Integration**: Hardcoded for https://cp.bmghosting.com
+- ⚡ **No Setup Required**: Auto-prompts for API keys when needed
 
 ## Installation
 
 ### Prerequisites
 
 - Node.js 18.0.0 or higher
-- A Discord bot token
-- Pterodactyl panel with API access
-- Admin access to your Pterodactyl panel
+- A Discord bot token and application
+- BMG Hosting account with Pterodactyl access
 
-### Setup
+### Bot Setup
 
 1. **Clone and install dependencies:**
 ```bash
 git clone <your-repo-url>
-cd pterodactyl-discord-bot
+cd BMG-Server-Management-Bot
 npm install
 ```
 
@@ -35,229 +34,234 @@ npm install
 cp .env.example .env
 ```
 
-Edit `.env` with your configuration:
+Edit `.env` with your Discord bot configuration:
 ```env
-# Discord Bot Configuration
+# Discord Bot Configuration (Required)
 DISCORD_TOKEN=your_discord_bot_token_here
 CLIENT_ID=your_discord_client_id_here
 
-# Pterodactyl Panel Configuration
-PTERODACTYL_URL=https://your-panel-url.com
-PTERODACTYL_API_KEY=your_pterodactyl_api_key_here
+# Optional: For guild-specific deployment
+GUILD_ID=your_server_id_here
 
-# Bot Configuration
-BOT_PREFIX=/
-UPDATE_INTERVAL=30000
-MAX_SERVERS_PER_USER=5
-
-# Security
-JWT_SECRET=your_jwt_secret_here
+# Optional: For API key encryption (auto-generated if not provided)
 ENCRYPTION_KEY=your_32_character_encryption_key_here
-
-# Report Configuration
-REPORT_OUTPUT_DIR=./reports
 ```
 
 3. **Deploy slash commands:**
 ```bash
-node deploy-commands.js
+npm run deploy
 ```
 
-4. **Start the bot:**
-```bash
-npm start
-```
+This will deploy commands and start the bot automatically.
 
-## Discord Bot Setup
+### Discord Application Setup
 
-### Creating a Discord Application
+1. **Create Discord Application:**
+   - Go to [Discord Developer Portal](https://discord.com/developers/applications)
+   - Click "New Application" and name it "BMG Server Management"
+   - Copy the Application ID to your `.env` as `CLIENT_ID`
 
-1. Go to [Discord Developer Portal](https://discord.com/developers/applications)
-2. Click "New Application" and give it a name
-3. Go to "Bot" section and create a bot
-4. Copy the bot token to your `.env` file
-5. Copy the Application ID to your `.env` file as `CLIENT_ID`
+2. **Create Bot:**
+   - Go to "Bot" section
+   - Click "Add Bot"
+   - Copy the bot token to your `.env` as `DISCORD_TOKEN`
 
-### Bot Permissions
+3. **Set Bot Permissions:**
+   - In "Bot" section, enable these intents:
+     - ✅ Guilds
+     - ✅ Guild Messages
+     - ❌ Message Content Intent (not needed)
 
-Your bot needs the following permissions:
-- `Send Messages`
-- `Use Slash Commands`
-- `Embed Links`
-- `Read Message History`
+4. **Invite Bot to Server:**
+   - Go to "OAuth2" > "URL Generator"
+   - Select scopes: `bot` and `applications.commands`
+   - Select permissions: `Send Messages`, `Use Slash Commands`, `Embed Links`
+   - Use generated URL to invite bot
 
-### Invite Link
+## User Guide
 
-Generate an invite link with these scopes:
-- `bot`
-- `applications.commands`
+### For BMG Hosting Customers
 
-## Usage
+#### Getting Your API Key
 
-### Linking a Server
+1. **Log into BMG Hosting Panel:**
+   - Go to https://cp.bmghosting.com
+   - Log in with your BMG Hosting account
 
-1. Use `/server link server_id:YOUR_SERVER_ID`
-2. Follow the verification instructions provided
-3. Run the verification command on your server console
-4. Use `/server verify server_id:YOUR_SERVER_ID code:VERIFICATION_CODE`
+2. **Generate Client API Key:**
+   - Click your profile (top right)
+   - Go to "Account Settings" > "API Credentials"
+   - Click "Create API Key"
+   - **Important:** Create an "Account API Key" (not Application API Key)
+   - Copy the key starting with `ptlc_`
 
-### Viewing Server Status
+#### First Time Setup
 
-- `/server status` - View real-time server statistics
-- Status messages auto-update every 30 seconds
-- Click the refresh button for manual updates
+1. **Verify Your Server:**
+   ```
+   /server verify server_uuid:your-server-uuid code:verification-code
+   ```
+   - Get your server UUID from the BMG Hosting panel
+   - When prompted, send your `ptlc_` API key in chat
+   - Bot will automatically delete your message for security
+   - Follow verification instructions in your server console
 
-### Controlling Servers
+2. **Link Additional Servers:**
+   ```
+   /server link server_uuid:your-server-uuid
+   ```
+   - Only available after you're verified
+   - Follow the same verification process
 
-- `/server control` - Access server control panel
-- Available actions: Start, Stop, Restart, Kill
+3. **View Server Dashboard:**
+   ```
+   /server dashboard
+   ```
+   - Shows all your linked servers
+   - Auto-refreshes every 10 seconds
+   - Control buttons work for everyone
 
-### Managing Linked Servers
+#### Commands
 
-- `/server unlink server_id:SERVER_ID` - Remove a server from Discord
+**For Verified Users:**
+- `/server verify` - Verify server ownership (first step)
+- `/server link` - Link additional servers
+- `/server dashboard` - View server dashboard
+- `/server unlink` - Remove server from Discord
 
-## Report Generation
+**For Everyone:**
+- Power buttons on dashboards work for anyone
+- No API key required to use Start/Stop/Restart/Kill buttons
 
-Generate reports of all connected servers:
+### Permission System
 
-```bash
-# Generate both JSON and PDF reports
-npm run generate-report
+**Verified Users (Server Owners):**
+- Can create and view dashboards
+- Can link/unlink servers
+- Must provide their own BMG Hosting API key
 
-# Generate only JSON report
-node scripts/generate-report.js json
+**Regular Users:**
+- Can use power buttons on shared dashboards
+- No setup or API key required
+- Cannot create their own dashboards
 
-# Generate only PDF report
-node scripts/generate-report.js pdf
+## Technical Details
 
-# List existing reports
-node scripts/generate-report.js list
+### Security Features
 
-# Cleanup old reports (30+ days)
-node scripts/generate-report.js cleanup
-```
+**Server Verification:**
+- Unique verification codes and tokens
+- Console-based ownership verification
+- 24-hour token expiration
 
-## Security Features
+**Data Protection:**
+- API keys encrypted with AES-256-CBC
+- User messages with API keys automatically deleted
+- Per-user credential isolation
 
-### Server Verification
+**Rate Limiting:**
+- 10 requests per minute per user
+- Protection against spam and abuse
 
-The bot uses a secure verification system:
-1. User requests to link a server
-2. Bot generates a unique verification code and token
-3. User must run a command on their server console
-4. Bot verifies ownership through the generated token
-5. Server is linked only after successful verification
+### Architecture
 
-### Rate Limiting
+**Per-User API Keys:**
+- Each user provides their own BMG Hosting API key
+- Credentials stored encrypted on disk
+- Shared credentials for power button access
 
-- 10 requests per minute per user for commands
-- 10 requests per minute per user for button interactions
-- Automatic cleanup of failed update attempts
+**Two-Tier Permissions:**
+- Verified users: Full dashboard access
+- Regular users: Power button access only
 
-### Data Encryption
-
-- Sensitive data is encrypted using AES-256-CBC
-- Verification tokens expire after 24 hours
-- User permissions are validated for every action
+**Auto-Refresh System:**
+- Dashboard updates every 10 seconds
+- Automatic timeout after 5 minutes
+- Error handling stops failed refreshes
 
 ## File Structure
 
 ```
-pterodactyl-discord-bot/
+BMG-Server-Management-Bot/
 ├── commands/
-│   └── server.js              # Main server management commands
+│   └── server.js              # Server management commands
 ├── config/
-│   └── database.js            # JSON-based database system
+│   └── database.js            # JSON database with encryption
 ├── events/
-│   ├── ready.js               # Bot ready event
-│   └── interactionCreate.js   # Command and interaction handling
+│   ├── ready.js               # Bot startup event
+│   └── interactionCreate.js   # Command and button handling
 ├── services/
-│   ├── auth.js                # Authentication and security
-│   ├── pterodactyl.js         # Pterodactyl API integration
-│   └── updateSystem.js        # Auto-updating system
-├── scripts/
-│   └── generate-report.js     # Report generation utility
+│   ├── auth.js                # Authentication and permissions
+│   ├── pterodactyl.js         # BMG Hosting API integration
+│   └── updateSystem.js        # Auto-update system
 ├── data/                      # Database files (auto-created)
-├── reports/                   # Generated reports (auto-created)
 ├── index.js                   # Main bot file
 ├── deploy-commands.js         # Slash command deployment
+├── setup.js                   # Initial setup script
 ├── package.json
 ├── .env.example
 └── README.md
 ```
 
-## API Integration
-
-### Pterodactyl API
-
-The bot uses the Pterodactyl Client API:
-- Server details and resource usage
-- Power management (start/stop/restart/kill)
-- Real-time statistics monitoring
-
-### Supported Endpoints
-
-- `GET /api/client/servers/{server}` - Server details
-- `GET /api/client/servers/{server}/resources` - Resource usage
-- `POST /api/client/servers/{server}/power` - Power management
-
-## Deployment
-
-### Running in Pterodactyl Panel
-
-1. Create a new Node.js server in your Pterodactyl panel
-2. Upload the bot files
-3. Install dependencies: `npm install`
-4. Configure your `.env` file
-5. Deploy commands: `node deploy-commands.js`
-6. Start the bot: `npm start`
-
-### Production Considerations
-
-- Use `pm2` for process management
-- Set up log rotation
-- Configure automatic restarts
-- Monitor memory usage
-- Regular database backups
-
 ## Troubleshooting
 
 ### Common Issues
 
-**Bot not responding to commands:**
-- Ensure slash commands are deployed: `node deploy-commands.js`
+**Bot not responding:**
+- Run `npm run deploy` to deploy commands
 - Check bot permissions in Discord server
-- Verify bot token in `.env` file
+- Verify `DISCORD_TOKEN` and `CLIENT_ID` in `.env`
 
-**Pterodactyl API errors:**
-- Verify API key has correct permissions
-- Check Pterodactyl URL format (include https://)
-- Ensure server IDs are correct
+**API key issues:**
+- Ensure you're using a CLIENT API key (`ptlc_`) not APPLICATION key (`ptla_`)
+- Generate key from Account Settings > API Credentials in BMG panel
+- Key must be from https://cp.bmghosting.com
 
 **Verification failing:**
-- Check server console access
-- Verify the verification command was run correctly
-- Ensure verification code hasn't expired (24 hours)
+- Check server UUID is correct (from BMG panel)
+- Run verification command exactly as shown in server console
+- Codes expire after 24 hours
 
-### Debug Mode
+**Permission errors:**
+- Only verified users can create dashboards
+- Anyone can use power buttons on existing dashboards
+- Use `/server verify` first to become verified
 
-Enable debug logging by setting `NODE_ENV=development` in your `.env` file.
+### Getting Help
 
-## Contributing
+**For BMG Hosting customers:**
+- Check your server console for verification commands
+- Ensure you have access to your server's console
+- Contact BMG Hosting support for panel access issues
 
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Test thoroughly
-5. Submit a pull request
+**For bot administrators:**
+- Check bot logs for error messages
+- Verify all environment variables are set
+- Ensure bot has proper Discord permissions
+
+## Development
+
+### Running Locally
+
+```bash
+# Install dependencies
+npm install
+
+# Configure environment
+cp .env.example .env
+# Edit .env with your bot credentials
+
+# Deploy commands and start
+npm run deploy
+```
+
+### Key Components
+
+- **Per-user credentials**: Each user stores their own encrypted API key
+- **UUID-based linking**: Uses server UUIDs instead of numeric IDs
+- **Auto-refresh dashboards**: Live updates every 10 seconds
+- **Shared power controls**: Anyone can use buttons without API keys
 
 ## License
 
 MIT License - see LICENSE file for details.
-
-## Support
-
-For support and questions:
-- Check the troubleshooting section
-- Review the logs for error messages
-- Ensure all configuration is correct

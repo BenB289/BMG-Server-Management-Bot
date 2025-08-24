@@ -82,53 +82,34 @@ async function handleButton(interaction) {
         await interaction.deferUpdate();
         const serverCommand = require('../commands/server');
         await serverCommand.showServerDashboard(interaction, serverId);
-    } else if (customId.startsWith('refresh_status_')) {
-        const serverId = customId.replace('refresh_status_', '');
-        
-        // Check permissions
-        const hasPermission = await authService.hasServerPermission(userId, serverId);
-        if (!hasPermission) {
-            return interaction.reply({
-                content: '❌ You do not have permission to access this server.',
-                ephemeral: true
-            });
-        }
-
-        await interaction.deferUpdate();
-        const serverCommand = require('../commands/server');
-        await serverCommand.showServerStatus(interaction, serverId);
-    } else if (customId.startsWith('refresh_')) {
-        const serverId = customId.replace('refresh_', '');
-        
-        // Check permissions
-        const hasPermission = await authService.hasServerPermission(userId, serverId);
-        if (!hasPermission) {
-            return interaction.reply({
-                content: '❌ You do not have permission to access this server.',
-                ephemeral: true
-            });
-        }
-
-        await interaction.deferUpdate();
-        const serverCommand = require('../commands/server');
-        await serverCommand.showServerDashboard(interaction, serverId);
     } else if (customId.startsWith('start_') || customId.startsWith('stop_') || 
                customId.startsWith('restart_') || customId.startsWith('kill_')) {
         
         const [action, serverId] = customId.split('_');
         
-        // Check permissions
-        const hasPermission = await authService.hasServerPermission(userId, serverId);
-        if (!hasPermission) {
-            return interaction.reply({
-                content: '❌ You do not have permission to control this server.',
-                ephemeral: true
-            });
-        }
+        // Allow anyone to use power buttons - no permission check needed
 
         await interaction.deferReply({ ephemeral: true });
         
-        const pterodactyl = new PterodactylAPI();
+        // Find any verified user's credentials to use for power buttons
+        const allUsers = await database.getAllUsers();
+        let sharedCredentials = null;
+        
+        for (const user of allUsers) {
+            const userCredentials = await database.getUserCredentials(user.userId);
+            if (userCredentials) {
+                sharedCredentials = userCredentials;
+                break;
+            }
+        }
+        
+        if (!sharedCredentials) {
+            return interaction.editReply({
+                content: '❌ No API credentials available. A verified server owner needs to set up their API key first.',
+            });
+        }
+        
+        const pterodactyl = new PterodactylAPI(sharedCredentials.panelUrl, sharedCredentials.apiKey);
         let result;
 
         switch (action) {

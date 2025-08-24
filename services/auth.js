@@ -91,6 +91,12 @@ class AuthService {
         return userServers.some(server => server.serverId === serverId && server.verified);
     }
 
+    // Check if user is verified (owns any verified server)
+    async isUserVerified(userId) {
+        const userServers = await database.getUserServers(userId);
+        return userServers.some(server => server.verified);
+    }
+
     // Rate limiting for API calls
     isRateLimited(userId, action = 'general') {
         // Simple in-memory rate limiting
